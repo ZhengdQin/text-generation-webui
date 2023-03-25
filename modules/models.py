@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import torch_npu
 import transformers
 from accelerate import infer_auto_device_map, init_empty_weights
 from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
@@ -31,7 +32,7 @@ if shared.args.deepspeed:
     # Distributed setup
     local_rank = shared.args.local_rank if shared.args.local_rank is not None else int(os.getenv("LOCAL_RANK", "0"))
     world_size = int(os.getenv("WORLD_SIZE", "1"))
-    torch.cuda.set_device(local_rank)
+    torch.npu.set_device(local_rank)
     deepspeed.init_distributed()
     ds_config = generate_ds_config(shared.args.bf16, 1 * world_size, shared.args.nvme_offload_dir)
     dschf = HfDeepSpeedConfig(ds_config) # Keep this object alive for the Transformers integration
@@ -49,11 +50,11 @@ def load_model(model_name):
             model = AutoModelForCausalLM.from_pretrained(Path(f"models/{shared.model_name}"), device_map='auto', load_in_8bit=True)
         else:
             model = AutoModelForCausalLM.from_pretrained(Path(f"models/{shared.model_name}"), low_cpu_mem_usage=True, torch_dtype=torch.bfloat16 if shared.args.bf16 else torch.float16)
-            if torch.has_mps:
+            if 0: #torch.has_mps:
                 device = torch.device('mps')
                 model = model.to(device)
             else:
-                model = model.cuda()
+                model = model.npu()
 
     # FlexGen
     elif shared.args.flexgen:
@@ -89,7 +90,7 @@ def load_model(model_name):
     elif shared.is_RWKV:
         from modules.RWKV import RWKVModel, RWKVTokenizer
 
-        model = RWKVModel.from_pretrained(Path(f'models/{model_name}'), dtype="fp32" if shared.args.cpu else "bf16" if shared.args.bf16 else "fp16", device="cpu" if shared.args.cpu else "cuda")
+        model = RWKVModel.from_pretrained(Path(f'models/{model_name}'), dtype="fp32" if shared.args.cpu else "bf16" if shared.args.bf16 else "fp16", device="cpu" if shared.args.cpu else "npu")
         tokenizer = RWKVTokenizer.from_pretrained(Path('models'))
 
         return model, tokenizer
@@ -103,8 +104,8 @@ def load_model(model_name):
     # Custom
     else:
         params = {"low_cpu_mem_usage": True}
-        if not any((shared.args.cpu, torch.cuda.is_available(), torch.has_mps)):
-            print("Warning: torch.cuda.is_available() returned False.\nThis means that no GPU has been detected.\nFalling back to CPU mode.\n")
+        if not any((shared.args.cpu, torch.npu.is_available())):
+            print("Warning: torch.npu.is_available() returned False.\nThis means that no GPU has been detected.\nFalling back to CPU mode.\n")
             shared.args.cpu = True
 
         if shared.args.cpu:
@@ -129,7 +130,7 @@ def load_model(model_name):
                 max_memory['cpu'] = max_cpu_memory
                 params['max_memory'] = max_memory
             elif shared.args.auto_devices:
-                total_mem = (torch.cuda.get_device_properties(0).total_memory / (1024*1024))
+                total_mem = (torch.npu.get_device_properties(0).total_memory / (1024*1024))
                 suggestion = round((total_mem-1000) / 1000) * 1000
                 if total_mem - suggestion < 800:
                     suggestion -= 1000
@@ -157,6 +158,12 @@ def load_model(model_name):
             )
 
         model = AutoModelForCausalLM.from_pretrained(checkpoint, **params)
+        
+        # breakpoint()
+        # tokenizer = transformers.LLaMATokenizer.from_pretrained(checkpoint)
+        # model = transformers.LLaMAForCausalLM.from_pretrained(checkpoint)
+        # tokenizer = AutoTokenizer.from_pretrained("decapoda-research/llama-7b-hf")
+        # model = AutoTokenizer.from_pretrained("decapoda-research/llama-7b-hf")
 
     # Loading the tokenizer
     if shared.model_name.lower().startswith(('gpt4chan', 'gpt-4chan', '4chan')) and Path("models/gpt-j-6B/").exists():
@@ -164,6 +171,10 @@ def load_model(model_name):
     else:
         tokenizer = AutoTokenizer.from_pretrained(Path(f"models/{shared.model_name}/"))
     tokenizer.truncation_side = 'left'
+
+    # breakpoint()
+    # tokenizer = transformers.LLaMATokenizer.from_pretrained("/home/TestUser02/qinzhengda/llama/text-generation-webui/models/llama-7b")
+    # model = transformers.LLaMAForCausalLM.from_pretrained("/home/TestUser02/qinzhengda/llama/text-generation-webui/models/llama-7b")
 
     print(f"Loaded the model in {(time.time()-t0):.2f} seconds.")
     return model, tokenizer

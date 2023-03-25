@@ -21,7 +21,7 @@ class RWKVModel:
         pass
 
     @classmethod
-    def from_pretrained(self, path, dtype="fp16", device="cuda"):
+    def from_pretrained(self, path, dtype="fp16", device="npu"):
         tokenizer_path = Path(f"{path.parent}/20B_tokenizer.json")
 
         if shared.args.rwkv_strategy is None:

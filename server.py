@@ -7,6 +7,7 @@ import zipfile
 from pathlib import Path
 
 import gradio as gr
+import torch_npu
 
 import modules.chat as chat
 import modules.extensions as extensions_module

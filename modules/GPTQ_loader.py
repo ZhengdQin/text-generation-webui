@@ -81,6 +81,6 @@ def load_quantized(model_name):
 
         # No offload
         elif not shared.args.cpu:
-            model = model.to(torch.device('cuda:0'))
+            model = model.to(torch.device('npu:0'))
 
     return model

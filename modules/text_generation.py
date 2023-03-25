@@ -5,6 +5,7 @@ import traceback
 
 import numpy as np
 import torch
+import torch_npu
 import transformers
 
 import modules.shared as shared
@@ -34,11 +35,12 @@ def encode(prompt, tokens_to_generate=0, add_special_tokens=True):
             return input_ids.numpy()
         elif shared.args.deepspeed:
             return input_ids.to(device=local_rank)
-        elif torch.has_mps:
+        elif 0: #torch.has_mps:
             device = torch.device('mps')
             return input_ids.to(device)
         else:
-            return input_ids.cuda()
+            breakpoint()
+            return input_ids.npu()
 
 def decode(output_ids):
     # Open Assistant relies on special tokens like <|endoftext|>
@@ -91,16 +93,16 @@ def formatted_outputs(reply, model_name):
 def clear_torch_cache():
     gc.collect()
     if not shared.args.cpu:
-        torch.cuda.empty_cache()
+        torch_npu.npu.empty_cache()
 
 def set_manual_seed(seed):
     if seed != -1:
         torch.manual_seed(seed)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(seed)
+        if torch.npu.is_available():
+            torch.npu.manual_seed_all(seed)
 
 def generate_reply(question, max_new_tokens, do_sample, temperature, top_p, typical_p, repetition_penalty, encoder_repetition_penalty, top_k, min_length, no_repeat_ngram_size, num_beams, penalty_alpha, length_penalty, early_stopping, seed, eos_token=None, stopping_strings=[]):
-    clear_torch_cache()
+    # clear_torch_cache()
     set_manual_seed(seed)
     t0 = time.time()
 
@@ -196,7 +198,7 @@ def generate_reply(question, max_new_tokens, do_sample, temperature, top_p, typi
             with torch.no_grad():
                 output = shared.model.generate(**generate_params)[0]
                 if cuda:
-                    output = output.cuda()
+                    output = output.npu()
             if shared.soft_prompt:
                 output = torch.cat((input_ids[0], output[filler_input_ids.shape[1]:]))
 
