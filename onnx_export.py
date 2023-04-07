@@ -20,7 +20,7 @@ import modules.ui as ui
 from modules.html_generator import generate_chat_html
 from modules.LoRA import add_lora_to_model
 from modules.models import load_model, load_soft_prompt
-from modules.text_print import clear_torch_cache, generate_reply, formatted_outputs
+from modules.text_generation import clear_torch_cache, generate_reply, formatted_outputs
 from modules.extensions import apply_extensions
 from modules.callbacks import (Iteratorize, Stream,
                                _SentinelTokenStoppingCriteria)
